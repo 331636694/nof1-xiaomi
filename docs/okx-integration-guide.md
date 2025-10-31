@@ -155,6 +155,17 @@ export interface ExchangeService {
   setLeverage(symbol: string, leverage: number): Promise<any>;
   setMarginType(symbol: string, marginType: 'ISOLATED' | 'CROSSED'): Promise<any>;
 
+  // 手动平仓检测（新增功能）
+  detectManualClosure(
+    currentPositions: PositionResponse[],
+    orderHistory: OrderHistoryRecord[]
+  ): Promise<ManualCloseRecord[]>;
+
+  handleManualClosure(
+    closeRecord: ManualCloseRecord,
+    config: FollowConfig
+  ): Promise<void>;
+
   // 市场数据
   getExchangeInformation(): Promise<any>;
   getSymbolInfo(symbol: string): Promise<any>;
@@ -221,6 +232,45 @@ export interface OrderResponse {
   type: string;
   time: number;
   updateTime: number;
+}
+
+// 手动平仓记录（新增类型）
+export interface ManualCloseRecord {
+  symbol: string;
+  side: "BUY" | "SELL";
+  closePrice: string;
+  closeQuantity: string;
+  closeTime: number;
+  detectionTime: number;
+  originalOrderId: string;
+  positionId?: string;
+  realizedPnl?: string;
+}
+
+// 订单历史记录（扩展支持手动平仓）
+export interface OrderHistoryRecord {
+  orderId: string;
+  symbol: string;
+  side: "BUY" | "SELL";
+  type: string;
+  quantity: string;
+  price?: string;
+  status: 'FILLED' | 'CANCELED' | 'REJECTED' | 'EXPIRED' | 'manual_closed';
+  updateTime: number;
+  isMaker?: boolean;
+  commission?: string;
+  realizedPnl?: string;
+}
+
+// 方向性价格容差检查（新增）
+export interface PriceToleranceCheck {
+  isValid: boolean;
+  priceDifference: number;
+  tolerancePercent: number;
+  direction: 'UP' | 'DOWN';
+  positionSide: "BUY" | "SELL";
+  referencePrice: string;
+  currentPrice: string;
 }
 ```
 
@@ -307,7 +357,7 @@ export interface OkxConfig {
 
 ## 分阶段实施计划
 
-### 📅 第一阶段：基础架构设计 (1-2天)
+### 📅 第一阶段：基础架构设计 (2-3天)
 
 #### 任务清单
 
@@ -321,16 +371,24 @@ export interface OkxConfig {
 - [ ] **1.2 定义统一接口**
   - 实现 `ExchangeService` 接口
   - 定义通用数据类型
+  - 添加手动平仓检测方法
   - 创建工厂模式基础结构
 
 - [ ] **1.3 更新配置系统**
   - 扩展 `constants.ts` 添加 OKX 相关常量
   - 更新 `config-manager.ts` 支持多交易所配置
   - 修改 `.env.example` 添加 OKX 配置模板
+  - 集成新的 CLI 参数（`--auto-refollow`, `--telegram-test`）
 
 - [ ] **1.4 创建测试基础**
   - 创建交易所接口的测试框架
   - 设计 Mock 服务用于测试
+  - 添加手动平仓检测的测试用例
+
+- [ ] **1.5 集成现有功能**
+  - 确保与现有 auto-refollow 功能兼容
+  - 集成方向性价格容差检查
+  - 协调插件通知系统架构
 
 #### 验收标准
 
@@ -338,10 +396,11 @@ export interface OkxConfig {
 - ✅ 工厂模式可以正确创建币安服务实例
 - ✅ 配置系统支持读取 OKX 配置
 - ✅ 基础测试框架可以运行
+- ✅ 与现有功能完全兼容
 
 ---
 
-### 📅 第二阶段：OKX 服务实现 (2-3天)
+### 📅 第二阶段：OKX 服务实现 (3-4天)
 
 #### 任务清单
 
@@ -366,7 +425,18 @@ export interface OkxConfig {
   - `setLeverage()` - 杠杆设置
   - `setMarginType()` - 保证金模式设置
 
-- [ ] **2.4 符号和精度处理**
+- [ ] **2.4 实现手动平仓检测**
+  - `detectManualClosure()` - 检测手动平仓
+  - `handleManualClosure()` - 处理手动平仓事件
+  - 集成 auto-refollow 功能
+  - 实现通知机制
+
+- [ ] **2.5 实现方向性价格容差**
+  - `calculateDirectionalPriceDifference()` - 方向性价格检查
+  - 集成现有的风险管理逻辑
+  - 支持多空头的不同容差策略
+
+- [ ] **2.6 符号和精度处理**
   ```typescript
   // OKX 符号转换：BTC → BTC-USDT-SWAP
   public convertSymbol(symbol: string): string {
@@ -375,27 +445,31 @@ export interface OkxConfig {
   }
   ```
 
-- [ ] **2.5 错误处理适配**
+- [ ] **2.7 错误处理适配**
   - 适配 OKX 特有的错误代码
   - 实现重试机制和时间同步
   - 统一错误消息格式
+  - 集成 Telegram 通知
 
 #### 验收标准
 
 - ✅ OKX 服务可以成功连接测试网
 - ✅ 基础 API 调用（账户信息、持仓查询）正常工作
 - ✅ 符号转换和精度格式化正确
+- ✅ 手动平仓检测功能正常工作
+- ✅ 方向性价格容差检查准确
 - ✅ 错误处理机制完善
 
 ---
 
-### 📅 第三阶段：代码重构 (1-2天)
+### 📅 第三阶段：代码重构 (2-3天)
 
 #### 任务清单
 
 - [ ] **3.1 重构 BinanceService**
   - 让 `BinanceService` 实现 `ExchangeService` 接口
   - 更新方法签名以匹配接口定义
+  - 添加手动平仓检测方法（币安版本）
   - 保持向后兼容性
 
 - [ ] **3.2 更新 TradingExecutor**
@@ -414,26 +488,39 @@ export interface OkxConfig {
   }
   ```
 
-- [ ] **3.3 更新依赖注入**
+- [ ] **3.3 集成 Auto-Refollow 功能**
+  - 更新 `FollowService` 以支持多交易所手动平仓检测
+  - 确保方向性价格容差在两个交易所都正常工作
+  - 统一 `OrderHistoryManager` 接口
+
+- [ ] **3.4 更新依赖注入**
   - 修改所有使用 `BinanceService` 的地方
   - 通过工厂模式创建交易所实例
   - 更新构造函数签名
+  - 集成新的 CLI 参数
 
-- [ ] **3.4 数据适配层**
+- [ ] **3.5 数据适配层**
   - 确保所有返回的数据格式统一
   - 处理交易所特有的字段差异
   - 更新相关的类型定义
+  - 适配 `ManualCloseRecord` 和 `PriceToleranceCheck`
+
+- [ ] **3.6 通知系统协调**
+  - 确保 Telegram 通知在两个交易所都正常工作
+  - 集成 `telegram-test` 命令
+  - 协调插件通知系统架构
 
 #### 验收标准
 
 - ✅ 现有币安功能完全正常，无回归
 - ✅ `TradingExecutor` 支持动态切换交易所
+- ✅ Auto-Refollow 功能在两个交易所都正常工作
 - ✅ 所有单元测试通过
 - ✅ 代码质量检查通过
 
 ---
 
-### 📅 第四阶段：CLI 和入口更新 (1天)
+### 📅 第四阶段：CLI 和入口更新 (2天)
 
 #### 任务清单
 
@@ -444,34 +531,47 @@ export interface OkxConfig {
     .option('-e, --exchange <exchange>', 'Exchange to use (binance|okx)', 'binance')
     .option('--okx-api-key <key>', 'OKX API key')
     .option('--okx-api-secret <secret>', 'OKX API secret')
-    .option('--okx-passphrase <passphrase>', 'OKX API passphrase');
+    .option('--okx-passphrase <passphrase>', 'OKX API passphrase')
+    .option('--auto-refollow', 'Enable auto-refollow when manual close detected')
+    .command('telegram-test', 'Test Telegram notification setup');
   ```
 
 - [ ] **4.2 更新主入口**
   - 修改 `src/index.ts` 支持交易所参数
   - 实现配置验证和错误提示
   - 更新帮助信息
+  - 添加交易所特定配置验证
 
 - [ ] **4.3 更新命令处理器**
   - 修改 `src/commands/` 下的命令文件
   - 支持传递交易所配置
+  - 集成 `--auto-refollow` 参数
+  - 添加 `telegram-test` 命令实现
   - 更新错误处理
 
 - [ ] **4.4 验证和测试**
   - 测试 CLI 参数解析
   - 验证配置传递正确性
   - 测试错误场景处理
+  - 验证新命令功能
+
+- [ ] **4.5 更新文档**
+  - 更新 README.md 的命令行参数说明
+  - 添加新功能的使用示例
+  - 更新故障排除指南
 
 #### 验收标准
 
 - ✅ CLI 支持 `--exchange okx` 参数
 - ✅ OKX 配置参数正确传递
+- ✅ `--auto-refollow` 参数正常工作
+- ✅ `telegram-test` 命令功能正常
 - ✅ 帮助信息包含新参数说明
 - ✅ 错误提示清晰友好
 
 ---
 
-### 📅 第五阶段：测试和文档 (1-2天)
+### 📅 第五阶段：测试和文档 (2-3天)
 
 #### 任务清单
 
@@ -483,21 +583,42 @@ export interface OkxConfig {
 - [ ] **5.2 集成测试**
   - 使用 OKX 测试网进行端到端测试
   - 验证所有核心功能
+  - 测试手动平仓检测功能
+  - 测试 auto-refollow 功能
   - 测试错误场景和恢复机制
 
-- [ ] **5.3 文档更新**
+- [ ] **5.3 功能专项测试**
+  - 测试方向性价格容差检查
+  - 验证 Telegram 通知集成
+  - 测试 `telegram-test` 命令
+  - 验证 CLI 参数解析
+  - 测试配置验证逻辑
+
+- [ ] **5.4 文档更新**
   - 更新 `README.md` 添加 OKX 配置说明
   - 创建 OKX API 申请指南
   - 更新环境变量文档
+  - 添加新功能使用示例
+  - 更新故障排除指南
 
-- [ ] **5.4 性能测试**
+- [ ] **5.5 性能测试**
   - 对比币安和 OKX 的响应时间
   - 验证内存使用情况
   - 测试并发请求处理
+  - 测试手动平仓检测性能
+
+- [ ] **5.6 用户验收测试**
+  - 邀请用户进行 Beta 测试
+  - 收集反馈和改进建议
+  - 修复发现的问题
+  - 优化用户体验
 
 #### 验收标准
 
 - ✅ 所有测试通过（包括新的 OKX 测试）
+- ✅ 手动平仓检测功能稳定可靠
+- ✅ Auto-refollow 功能正常工作
+- ✅ Telegram 通知集成完善
 - ✅ 文档完整且准确
 - ✅ 性能表现符合预期
 - ✅ 用户体验良好
@@ -617,6 +738,138 @@ class OkxService implements ExchangeService {
 }
 ```
 
+### 🔄 手动平仓检测实现（新增功能）
+
+OKX 服务需要实现手动平仓检测，以支持 auto-refollow 功能：
+
+```typescript
+class OkxService implements ExchangeService {
+  async detectManualClosure(
+    currentPositions: PositionResponse[],
+    orderHistory: OrderHistoryRecord[]
+  ): Promise<ManualCloseRecord[]> {
+    const manualCloses: ManualCloseRecord[] = [];
+
+    // 获取最近的交易历史
+    const recentTrades = await this.getUserTrades(undefined, Date.now() - 300000); // 最近5分钟
+
+    for (const position of currentPositions) {
+      if (parseFloat(position.positionAmt) === 0) {
+        // 检查是否有未跟踪的平仓记录
+        const closeRecord = await this.findManualCloseRecord(position, orderHistory, recentTrades);
+        if (closeRecord) {
+          manualCloses.push(closeRecord);
+        }
+      }
+    }
+
+    return manualCloses;
+  }
+
+  private async findManualCloseRecord(
+    position: PositionResponse,
+    orderHistory: OrderHistoryRecord[],
+    recentTrades: UserTrade[]
+  ): Promise<ManualCloseRecord | null> {
+    // 查找可能的手动平仓交易
+    const positionSide = position.positionSide === 'LONG' ? 'SELL' : 'BUY';
+    const closingTrades = recentTrades.filter(trade =>
+      trade.symbol === position.symbol &&
+      trade.side === positionSide &&
+      !orderHistory.some(order => order.orderId === trade.orderId)
+    );
+
+    if (closingTrades.length > 0) {
+      // 计算总平仓量和平均价格
+      const totalQuantity = closingTrades.reduce((sum, trade) => sum + parseFloat(trade.qty), 0);
+      const avgPrice = closingTrades.reduce((sum, trade) =>
+        sum + parseFloat(trade.price) * parseFloat(trade.qty), 0
+      ) / totalQuantity;
+
+      return {
+        symbol: position.symbol,
+        side: positionSide,
+        closePrice: avgPrice.toFixed(position.markPrice.split('.')[1].length),
+        closeQuantity: totalQuantity.toString(),
+        closeTime: Math.max(...closingTrades.map(trade => trade.time)),
+        detectionTime: Date.now(),
+        originalOrderId: 'MANUAL_DETECTED',
+        realizedPnl: position.unRealizedProfit
+      };
+    }
+
+    return null;
+  }
+
+  async handleManualClosure(
+    closeRecord: ManualCloseRecord,
+    config: FollowConfig
+  ): Promise<void> {
+    // 实现自动重新跟单逻辑
+    console.log(`🔄 检测到手动平仓: ${closeRecord.symbol} ${closeRecord.side} ${closeRecord.closeQuantity}`);
+
+    // 发送通知
+    await this.sendManualCloseNotification(closeRecord);
+
+    // 如果启用了 auto-refollow，重新开始跟单
+    if (config.autoRefollow) {
+      console.log('🚀 启动自动重新跟单...');
+      // 重置订单历史，准备重新跟单
+      // 这里会调用具体的重新跟单逻辑
+    }
+  }
+
+  private async sendManualCloseNotification(closeRecord: ManualCloseRecord): Promise<void> {
+    // 发送 Telegram 通知或其他通知方式
+    const message = `🔄 手动平仓检测
+
+币种: ${closeRecord.symbol}
+方向: ${closeRecord.side}
+价格: ${closeRecord.closePrice}
+数量: ${closeRecord.closeQuantity}
+时间: ${new Date(closeRecord.closeTime).toLocaleString()}
+
+系统将自动重新开始跟单。`;
+
+    // 调用通知服务
+    // await notificationService.send(message);
+  }
+}
+```
+
+### 🎯 方向性价格容差检查
+
+实现更智能的价格容差检查，考虑持仓方向：
+
+```typescript
+class OkxService implements ExchangeService {
+  calculateDirectionalPriceDifference(
+    currentPrice: number,
+    referencePrice: number,
+    positionSide: "BUY" | "SELL",
+    tolerancePercent: number
+  ): PriceToleranceCheck {
+    const priceDifference = positionSide === 'BUY'
+      ? currentPrice - referencePrice  // 多头：价格上涨为正向差异
+      : referencePrice - currentPrice; // 空头：价格下跌为正向差异
+
+    const toleranceAmount = referencePrice * (tolerancePercent / 100);
+    const isValid = Math.abs(priceDifference) <= toleranceAmount;
+    const direction = priceDifference >= 0 ? 'UP' : 'DOWN';
+
+    return {
+      isValid,
+      priceDifference,
+      tolerancePercent,
+      direction,
+      positionSide,
+      referencePrice: referencePrice.toString(),
+      currentPrice: currentPrice.toString()
+    };
+  }
+}
+```
+
 ### ⚠️ 错误处理适配
 
 OKX 使用不同的错误代码体系：
@@ -690,23 +943,52 @@ function handleOkxError(error: any): never {
 创建 `.env` 文件（或更新现有文件）：
 
 ```bash
-# OKX API 配置
-OKX_API_KEY=your_api_key_here
-OKX_API_SECRET=your_api_secret_here
-OKX_API_PASSPHRASE=your_passphrase_here
+# Nof1 API Configuration
+# 用于获取AI Agent的交易信号
+NOF1_API_BASE_URL=https://nof1.ai/api
 
-# 使用测试网（推荐）
+# OKX API Configuration
+# ⚠️ 重要：必须启用合约交易权限
+# 获取方式：https://www.okx.com/account/api-management
+OKX_API_KEY=your_okx_api_key_here
+OKX_API_SECRET=your_okx_api_secret_here
+OKX_API_PASSPHRASE=your_okx_passphrase_here
+
+# 是否使用测试网环境（推荐新手先使用测试网）
+# true = 测试网（虚拟资金，无风险）
+# false = 正式网（真实资金，有风险）
 OKX_TESTNET=true
 
-# 选择默认交易所（可选）
-DEFAULT_EXCHANGE=okx
+# Trading Configuration
+# 交易相关配置通过命令行参数控制，如：
+# --total-margin 1000    # 总保证金
+# --fixed-amount-per-coin 100  # 每个币种固定保证金
+# --price-tolerance 1.0  # 价格容差百分比
+# --auto-refollow        # 启用自动重新跟单功能
+
+# Logging Configuration
+# 日志级别: ERROR, WARN, INFO (默认), DEBUG, VERBOSE
+# INFO - 只显示重要操作(推荐日常使用)
+# DEBUG - 显示详细调试信息
+# VERBOSE - 显示所有日志(仅用于深度调试)
+LOG_LEVEL=INFO
+
+# Telegram Bot Configuration
+# 可选，用于接收交易通知
+# 获取方式：https://core.telegram.org/bots#6-botfather
+TELEGRAM_API_TOKEN=
+TELEGRAM_CHAT_ID=
+TELEGRAM_ENABLED=false
+
+# 交易所选择（可选，默认 binance）
+DEFAULT_EXCHANGE=okx  # binance | okx
 ```
 
 #### 4. 测试网配置
 
 OKX 提供测试网环境：
 
-- **测试网地址**: https://www.okx.com/balance
+- **测试网地址**: https://www.okx.com/account/demo
 - **测试网 API**: https://www.okx.com/api/v5/
 - **获取测试资金**: 测试网账户会自动获得虚拟资金
 
@@ -714,11 +996,16 @@ OKX 提供测试网环境：
 
 | 变量名 | 必需 | 说明 | 示例 |
 |--------|------|------|------|
+| `NOF1_API_BASE_URL` | ✅ | Nof1 API 基础URL | `https://nof1.ai/api` |
 | `OKX_API_KEY` | ✅ | OKX API Key | `xxxx-xxxx-xxxx-xxxx` |
 | `OKX_API_SECRET` | ✅ | OKX Secret Key | `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
 | `OKX_API_PASSPHRASE` | ✅ | API 创建时设置的 Passphrase | `YourPassphrase123` |
 | `OKX_TESTNET` | ❌ | 是否使用测试网 | `true` |
 | `DEFAULT_EXCHANGE` | ❌ | 默认交易所 | `okx` |
+| `LOG_LEVEL` | ❌ | 日志级别 | `INFO` |
+| `TELEGRAM_API_TOKEN` | ❌ | Telegram Bot Token | `bot_token_here` |
+| `TELEGRAM_CHAT_ID` | ❌ | Telegram 聊天ID | `chat_id_here` |
+| `TELEGRAM_ENABLED` | ❌ | 是否启用Telegram通知 | `false` |
 
 ### 🚀 快速验证
 
@@ -736,13 +1023,23 @@ npm start -- status --exchange okx
 npm start -- follow test-agent --risk-only --exchange okx
 ```
 
-#### 3. 小额测试
+#### 3. 测试 Telegram 通知
+
+```bash
+# 测试 Telegram 通知设置
+npm start -- telegram-test --exchange okx
+```
+
+#### 4. 小额测试
 
 在测试网上进行小额测试交易：
 
 ```bash
 # 使用最小金额测试
 npm start -- follow deepseek-chat-v3.1 --total-margin 10 --exchange okx
+
+# 启用自动重新跟单功能测试
+npm start -- follow deepseek-chat-v3.1 --total-margin 10 --auto-refollow --exchange okx
 ```
 
 ---
@@ -900,6 +1197,151 @@ describe('SymbolConverter', () => {
 });
 ```
 
+3. **手动平仓检测测试（新增）**
+```typescript
+describe('Manual Close Detection', () => {
+  let okxService: OkxService;
+  let mockOrderHistory: OrderHistoryRecord[];
+
+  beforeEach(() => {
+    okxService = new OkxService(mockConfig);
+    mockOrderHistory = [
+      {
+        orderId: '12345',
+        symbol: 'BTC-USDT-SWAP',
+        side: 'BUY',
+        type: 'MARKET',
+        quantity: '0.1',
+        status: 'FILLED',
+        updateTime: Date.now() - 60000
+      }
+    ];
+  });
+
+  test('should detect manual position close', async () => {
+    const mockPositions: PositionResponse[] = [
+      {
+        symbol: 'BTC-USDT-SWAP',
+        positionAmt: '0',
+        entryPrice: '50000',
+        markPrice: '51000',
+        unRealizedProfit: '0',
+        updateTime: Date.now()
+      }
+    ];
+
+    const manualCloses = await okxService.detectManualClosure(mockPositions, mockOrderHistory);
+
+    expect(manualCloses).toHaveLength(1);
+    expect(manualCloses[0].symbol).toBe('BTC-USDT-SWAP');
+    expect(manualCloses[0].side).toBe('SELL');
+  });
+
+  test('should not detect manual close when position exists', async () => {
+    const mockPositions: PositionResponse[] = [
+      {
+        symbol: 'BTC-USDT-SWAP',
+        positionAmt: '0.1',
+        entryPrice: '50000',
+        markPrice: '51000',
+        unRealizedProfit: '100',
+        updateTime: Date.now()
+      }
+    ];
+
+    const manualCloses = await okxService.detectManualClosure(mockPositions, mockOrderHistory);
+
+    expect(manualCloses).toHaveLength(0);
+  });
+});
+```
+
+4. **方向性价格容差测试（新增）**
+```typescript
+describe('Directional Price Tolerance', () => {
+  let okxService: OkxService;
+
+  beforeEach(() => {
+    okxService = new OkxService(mockConfig);
+  });
+
+  test('should validate price tolerance for LONG position correctly', () => {
+    const result = okxService.calculateDirectionalPriceDifference(
+      51000, // currentPrice
+      50000, // referencePrice
+      'BUY',  // positionSide
+      2.0     // tolerancePercent
+    );
+
+    expect(result.isValid).toBe(true);
+    expect(result.priceDifference).toBe(1000);
+    expect(result.direction).toBe('UP');
+    expect(result.positionSide).toBe('BUY');
+  });
+
+  test('should validate price tolerance for SHORT position correctly', () => {
+    const result = okxService.calculateDirectionalPriceDifference(
+      49000, // currentPrice
+      50000, // referencePrice
+      'SELL', // positionSide
+      2.0     // tolerancePercent
+    );
+
+    expect(result.isValid).toBe(true);
+    expect(result.priceDifference).toBe(1000);
+    expect(result.direction).toBe('DOWN');
+    expect(result.positionSide).toBe('SELL');
+  });
+
+  test('should reject price outside tolerance range', () => {
+    const result = okxService.calculateDirectionalPriceDifference(
+      53000, // currentPrice (6% difference)
+      50000, // referencePrice
+      'BUY',  // positionSide
+      2.0     // tolerancePercent
+    );
+
+    expect(result.isValid).toBe(false);
+    expect(result.direction).toBe('UP');
+  });
+});
+```
+
+5. **Auto-Refollow 功能测试（新增）**
+```typescript
+describe('Auto-Refollow Functionality', () => {
+  let okxService: OkxService;
+  let mockFollowConfig: FollowConfig;
+
+  beforeEach(() => {
+    okxService = new OkxService(mockConfig);
+    mockFollowConfig = {
+      agentName: 'test-agent',
+      autoRefollow: true,
+      totalMargin: 1000
+    };
+  });
+
+  test('should handle manual closure and trigger refollow', async () => {
+    const mockCloseRecord: ManualCloseRecord = {
+      symbol: 'BTC-USDT-SWAP',
+      side: 'SELL',
+      closePrice: '51000',
+      closeQuantity: '0.1',
+      closeTime: Date.now(),
+      detectionTime: Date.now(),
+      originalOrderId: 'MANUAL_DETECTED'
+    };
+
+    const handleSpy = jest.spyOn(okxService, 'handleManualClosure');
+
+    await okxService.handleManualClosure(mockCloseRecord, mockFollowConfig);
+
+    expect(handleSpy).toHaveBeenCalledWith(mockCloseRecord, mockFollowConfig);
+  });
+});
+```
+
 ### 🔧 集成测试
 
 #### 测试环境配置
@@ -962,9 +1404,21 @@ npm start -- status --exchange binance
 echo "Testing OKX connection..."
 npm start -- status --exchange okx
 
+# 测试 Telegram 通知
+echo "Testing Telegram notifications..."
+npm start -- telegram-test --exchange okx
+
 # 测试配置验证
 echo "Testing configuration validation..."
 npm start -- follow test-agent --risk-only --exchange okx
+
+# 测试手动平仓检测（模拟）
+echo "Testing manual close detection..."
+npm start -- follow test-agent --risk-only --auto-refollow --exchange okx
+
+# 测试方向性价格容差
+echo "Testing directional price tolerance..."
+npm start -- follow test-agent --total-margin 10 --price-tolerance 1.0 --exchange okx
 
 echo "✅ E2E tests completed"
 ```
@@ -1075,10 +1529,43 @@ echo "✅ E2E tests completed"
 
 ---
 
-**文档版本**: v1.0
+## 📊 项目时间线总结
+
+### 🎯 总体时间调整
+
+由于集成了新的功能特性，项目时间线从原来的 **7-10天** 调整为 **10-15天**：
+
+| 阶段 | 原计划时间 | 调整后时间 | 主要增加内容 |
+|------|------------|------------|--------------|
+| 第一阶段：基础架构设计 | 1-2天 | 2-3天 | 手动平仓检测接口、新功能集成 |
+| 第二阶段：OKX 服务实现 | 2-3天 | 3-4天 | 手动平仓检测、方向性价格容差 |
+| 第三阶段：代码重构 | 1-2天 | 2-3天 | Auto-Refollow 集成、通知系统 |
+| 第四阶段：CLI 和入口更新 | 1天 | 2天 | 新 CLI 参数、telegram-test 命令 |
+| 第五阶段：测试和文档 | 1-2天 | 2-3天 | 功能专项测试、用户验收 |
+| **总计** | **6-10天** | **11-15天** | **新增功能集成** |
+
+### 🔧 关键里程碑
+
+1. **Day 3**: 基础架构完成，接口定义就绪
+2. **Day 7**: OKX 服务实现完成，核心功能可用
+3. **Day 10**: 代码重构完成，现有功能兼容
+4. **Day 12**: CLI 更新完成，用户体验优化
+5. **Day 15**: 全面测试完成，项目发布就绪
+
+### ⚡ 关键成功因素
+
+- **向后兼容性**: 确保现有币安用户功能不受影响
+- **功能对等性**: OKX 功能与币安功能完全一致
+- **新功能集成**: 手动平仓检测和 auto-refollow 功能在两个交易所都可用
+- **用户体验**: 无缝切换，统一的命令行接口
+
+---
+
+**文档版本**: v1.1
 **创建日期**: 2025-10-28
 **作者**: Claude Code Assistant
-**最后更新**: 2025-10-28
+**最后更新**: 2025-10-30
+**更新内容**: 集成最新代码变更，包含手动平仓检测和 auto-refollow 功能
 
 ---
 
