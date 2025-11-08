@@ -1,34 +1,6 @@
-# Nof1 AI Agent 跟单交易系统
+# 跟单交易系统
 
-中文 | [English](./README_EN.md)
 
-![TypeScript](https://img.shields.io/badge/typescript-5.0%2B-blue)
-![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-green)
-![License](https://img.shields.io/badge/license-MIT-blue)
-
-一个用于跟踪 nof1.ai AI Agent 交易信号并自动执行 Binance 合约交易的命令行工具。支持7个AI量化Agent的实时跟单，自动识别开仓、平仓、换仓和止盈止损信号。
-
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/F1F11HO935)
-
-<img width="220" height="286" alt="b7c0054cf81fe6735d60ab5de48243e5" src="https://github.com/user-attachments/assets/4628befa-96b4-42dd-af42-4724a9a28336" />
-
-## 🏢 代部署服务
-
-**不想自己部署？我们提供代部署服务！**
-
-### 服务器部署的优势
-- 🖥️ **无需本地电脑运行** - 服务器24小时自动运行，无需保持自己的电脑开着
-- 🌍 **无需翻墙** - 推荐的服务器在国外环境，访问Binance API和nof1.ai更稳定
-- 🔋 **省心省力** - 专业配置，自动运行，无需担心环境配置和网络问题
-
-### 服务费用
-- 💰 **服务器成本低** - 一个服务器月租仅需40元人民币
-- 🛠️ **部署服务费面议** - 根据具体需求进行配置和部署
-
-### 联系方式
-📱 **有意者请加微信**: `gptkit`
-
-> 备注：代部署服务包含完整的环境配置、系统部署、运行测试和使用指导。
 
 ## ⚡ 快速开始
 
@@ -67,13 +39,9 @@ npm start -- profit
 - **📈 盈利统计**: 精确的盈利分析，基于真实交易数据计算（含手续费统计）
 - **🛡️ 风险控制**: 支持`--risk-only`模式，只观察不执行交易
 
-## 📊 实盘跟踪
 
-**deepseek-chat-v3.1 Agent 实盘跟踪面板**: [https://nof1-tracker-dashboard.onrender.com](https://nof1-tracker-dashboard.onrender.com)
 
-实时查看 deepseek-chat-v3.1 AI Agent 的交易表现、持仓情况和盈亏统计。
 
-Dashboard项目地址: https://github.com/terryso/nof1-tracker-dashboard
 
 ## 🤖 支持的AI Agent
 
@@ -550,20 +518,7 @@ npm run build
 npm run lint
 ```
 
-## 📚 更多文档
 
-- **[详细跟单策略文档](./docs/follow-strategy.md)** - 完整的跟单策略和风险评估
-- **[快速参考手册](./docs/quick-reference.md)** - 常用命令快速查询
-- **[自动重新跟单功能说明](./docs/auto-refollow-manual-close.md)** - 手工平仓检测和自动重新跟单详细说明
-- **[数据提供者抽象层](./docs/data-provider-abstraction.md)** - 如何切换到其他数据源（当 nof1 API 停用时）
-
-## ⭐ Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=terryso/nof1-tracker&type=date&legend=top-left)](https://www.star-history.com/#terryso/nof1-tracker&type=date&legend=top-left)
-
-## 📄 许可证
-
-MIT License - 查看 [LICENSE](LICENSE) 文件了解详情
 
 ---
 
